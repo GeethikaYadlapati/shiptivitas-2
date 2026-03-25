@@ -123,11 +123,46 @@ app.put('/api/v1/clients/:id', (req, res) => {
 
   let { status, priority } = req.body;
   let clients = db.prepare('select * from clients').all();
-  const client = clients.find(client => client.id === id);
+  let client = clients.find(client => client.id === id);
 
   /* ---------- Update code below ----------*/
-
-
+ 
+  if (status) {
+    // status can only be either 'backlog' | 'in-progress' | 'complete'
+    if (status !== 'backlog' && status !== 'in-progress' && status !== 'complete') {
+      return res.status(400).send({
+        'message': 'Invalid status provided.',
+        'long_message': 'Status can only be one of the following: [backlog | in-progress | complete].',
+      });
+    }
+    
+    db.prepare("update clients set status = $status WHERE id = $id").run({ status: status, id: id });
+    clients = db.prepare('select * from clients').all();
+    client = clients.find(client => client.id === id);
+    
+  }
+  const { valid: valid2, messageObj: messageObj2 } = validatePriority(priority);
+  if(priority){
+    console.log("funnier");
+    if (!valid2) {
+      console.log("funniest");
+      return res.status(400).send(messageObj2);
+    }else{
+      console.log("funny");
+   
+      if(client.priority < priority){
+        db.prepare("UPDATE clients SET priority = priority - 1 WHERE priority > $priorityOld AND priority <= $priorityNew AND status = $status").run({priorityNew: priority , priorityOld: client.priority, status: client.status})
+      }else if(client.priority > priority){
+        db.prepare("UPDATE clients SET priority = priority + 1 WHERE priority >= $priorityNew AND priority < $priorityOld AND status = $status").run({priorityNew: priority , priorityOld: client.priority, status: client.status})
+      }
+      
+      
+      db.prepare("UPDATE clients SET priority = $priority WHERE id = $id").run({ priority: priority, id: id });
+  
+      clients = db.prepare('select * from clients ORDER BY priority ASC').all();
+    }
+  }
+  
 
   return res.status(200).send(clients);
 });
